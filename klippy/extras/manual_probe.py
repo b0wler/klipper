@@ -4,23 +4,26 @@
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
 import logging, bisect
-import homing
 
 class ManualProbe:
     def __init__(self, config):
         self.printer = config.get_printer()
         # Register commands
         self.gcode = self.printer.lookup_object('gcode')
+        self.gcode_move = self.printer.load_object(config, "gcode_move")
         self.gcode.register_command('MANUAL_PROBE', self.cmd_MANUAL_PROBE,
                                     desc=self.cmd_MANUAL_PROBE_help)
-        self.z_position_endstop = None
-        if config.has_section('stepper_z'):
-            zconfig = config.getsection('stepper_z')
-            if zconfig.get_prefix_options('position_endstop'):
-                self.z_position_endstop = zconfig.getfloat('position_endstop')
-                self.gcode.register_command(
-                    'Z_ENDSTOP_CALIBRATE', self.cmd_Z_ENDSTOP_CALIBRATE,
-                    desc=self.cmd_Z_ENDSTOP_CALIBRATE_help)
+        zconfig = config.getsection('stepper_z')
+        self.z_position_endstop = zconfig.getfloat('position_endstop', None,
+                                                   note_valid=False)
+        if self.z_position_endstop is not None:
+            self.gcode.register_command(
+                'Z_ENDSTOP_CALIBRATE', self.cmd_Z_ENDSTOP_CALIBRATE,
+                desc=self.cmd_Z_ENDSTOP_CALIBRATE_help)
+            self.gcode.register_command(
+                'Z_OFFSET_APPLY_ENDSTOP',
+                self.cmd_Z_OFFSET_APPLY_ENDSTOP,
+                desc=self.cmd_Z_OFFSET_APPLY_ENDSTOP_help)
     def manual_probe_finalize(self, kin_pos):
         if kin_pos is not None:
             self.gcode.respond_info("Z position is %.3f" % (kin_pos[2],))
@@ -40,6 +43,20 @@ class ManualProbe:
     cmd_Z_ENDSTOP_CALIBRATE_help = "Calibrate a Z endstop"
     def cmd_Z_ENDSTOP_CALIBRATE(self, gcmd):
         ManualProbeHelper(self.printer, gcmd, self.z_endstop_finalize)
+    def cmd_Z_OFFSET_APPLY_ENDSTOP(self,gcmd):
+        offset = self.gcode_move.get_status()['homing_origin'].z
+        configfile = self.printer.lookup_object('configfile')
+        if offset == 0:
+            self.gcode.respond_info("Nothing to do: Z Offset is 0")
+        else:
+            new_calibrate = self.z_position_endstop - offset
+            self.gcode.respond_info(
+                "stepper_z: position_endstop: %.3f\n"
+                "The SAVE_CONFIG command will update the printer config file\n"
+                "with the above and restart the printer." % (new_calibrate))
+            configfile.set('stepper_z', 'position_endstop',
+                "%.3f" % (new_calibrate,))
+    cmd_Z_OFFSET_APPLY_ENDSTOP_help = "Adjust the z endstop_position"
 
 # Verify that a manual probe isn't already in progress
 def verify_no_manual_probe(printer):
@@ -84,21 +101,20 @@ class ManualProbeHelper:
             return self.last_kinematics_pos
         self.toolhead.flush_step_generation()
         kin = self.toolhead.get_kinematics()
-        for s in kin.get_steppers():
-            s.set_tag_position(s.get_commanded_position())
-        kin_pos = kin.calc_tag_position()
+        kin_spos = {s.get_name(): s.get_commanded_position()
+                    for s in kin.get_steppers()}
+        kin_pos = kin.calc_position(kin_spos)
         self.last_toolhead_pos = toolhead_pos
         self.last_kinematics_pos = kin_pos
         return kin_pos
     def move_z(self, z_pos):
         curpos = self.toolhead.get_position()
         try:
-            if curpos[2] - z_pos < Z_BOB_MINIMUM:
-                curpos[2] = z_pos + Z_BOB_MINIMUM
-                self.toolhead.move(curpos, self.speed)
-            curpos[2] = z_pos
-            self.toolhead.move(curpos, self.speed)
-        except homing.CommandError as e:
+            z_bob_pos = z_pos + Z_BOB_MINIMUM
+            if curpos[2] < z_bob_pos:
+                self.toolhead.manual_move([None, None, z_bob_pos], self.speed)
+            self.toolhead.manual_move([None, None, z_pos], self.speed)
+        except self.printer.command_error as e:
             self.finalize(False)
             raise
     def report_z_status(self, warn_no_change=False, prev_pos=None):

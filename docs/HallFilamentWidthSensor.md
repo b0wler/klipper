@@ -1,3 +1,5 @@
+# Hall filament width sensor
+
 This document describes Filament Width Sensor host module. Hardware used for developing this host module is based on Two Hall liniar sensors (ss49e for example). Sensors in the body are located opposite sides.  Principle of operation : two hall sensors work in differential mode, temperature drift same for sensor. Special temperature compensation not needed. You can find designs at [thingiverse.com](https://www.thingiverse.com/thing:4138933)
 
 [Hall based filament width sensor assembly video](https://www.youtube.com/watch?v=TDO9tME8vp4)
@@ -92,26 +94,17 @@ Sensor generates two analog output based on calculated filament width. Sum of ou
 **hall_filament_width_sensor.is_active** Sensor on or off
 
 ## Template for menu variables
-    [menu __filament_width_current]
-    type: item
-    name: "Dia:{0:4.2f} mm"
-    parameter:  hall_filament_width_sensor.Diameter
+    [menu __main __filament __width_current]
+    type: command
+    enable: {'hall_filament_width_sensor' in printer}
+    name: Dia: {'%.2F' % printer.hall_filament_width_sensor.Diameter}
+    index: 0
 
-    [menu __filament_raw_width_current]
-    type: item
-    name: "RAW:{0:4.0f}"
-    parameter:  hall_filament_width_sensor.Raw
-
-    [menu __filament]
-    type: list
-    name: Filament
-    items:
-     __temp __hotend0_current, __temp __hotend0_target
-     .__unload
-     .__load
-     .__feed
-     __filament_width_current
-     __filament_raw_width_current
+    [menu __main __filament __raw_width_current]
+    type: command
+    enable: {'hall_filament_width_sensor' in printer}
+    name: Raw: {'%4.0F' % printer.hall_filament_width_sensor.Raw}
+    index: 1
 
 ## Calibration procedure
 Insert first  calibration rod (1.5 mm size) get first  raw sensor value
