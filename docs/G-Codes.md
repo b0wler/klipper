@@ -762,6 +762,16 @@ babystepping), and subtract it from the stepper_z endstop_position.
 This acts to take a frequently used babystepping value, and "make it
 permanent". Requires a `SAVE_CONFIG` to take effect.
 
+### XPT 2046 touch screen controller commands
+The following command is available when a
+[xpt_2046 config section](Config_Reference.md#xpt_2046)
+is enabled.
+- `XPT_TOUCH_REPORT [ENABLE=[1|0]]`: Enables or disables touch reporting. When
+  enabled, all touch events and the associated coordinates are printed to the
+  terminal. This can be used as an aid when defining button shapes in the
+  printer configuration.
+  3 changes: 2 additions & 1 deletion3  
+
 ### [manual_stepper]
 
 The following command is available when a
