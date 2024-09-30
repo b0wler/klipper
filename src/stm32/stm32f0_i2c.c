@@ -146,7 +146,8 @@ i2c_setup(uint32_t bus, uint32_t rate, uint8_t addr)
         enable_pclock((uint32_t)i2c);
         gpio_peripheral(ii->scl_pin, ii->function | GPIO_OPEN_DRAIN, 1);
         gpio_peripheral(ii->sda_pin, ii->function | GPIO_OPEN_DRAIN, 1);
-
+        
+#if !CONFIG_MACH_STM32H7
         // Set 100Khz frequency and enable
         uint32_t nom_i2c_clock = 8000000;  // 8mhz internal clock = 125ns ticks
         uint32_t scll = 40; // 40 * 125ns = 5us
@@ -162,7 +163,24 @@ i2c_setup(uint32_t bus, uint32_t rate, uint8_t addr)
                         | (sdadel << I2C_TIMINGR_SDADEL_Pos)
                         | ((scldel - 1) << I2C_TIMINGR_SCLDEL_Pos));
         i2c->CR1 = I2C_CR1_PE;
+#else
+        // Set 400Khz frequency and enable
+        uint32_t nom_i2c_clock = 8000000;  // 8mhz internal clock = 125ns ticks
+        uint32_t scll = 10; // 10 * 125ns = 1.255us
+        uint32_t sclh = 8; // 8 * 125ns = 1us
+        uint32_t sdadel = 1; // 1 * 125ns = 125ns
+        uint32_t scldel = 3; // 3 * 125ns = 375ns
+
+        uint32_t pclk = get_pclock_frequency((uint32_t)i2c);
+        uint32_t presc = DIV_ROUND_UP(pclk, nom_i2c_clock);
+        i2c->TIMINGR = (((presc - 1) << I2C_TIMINGR_PRESC_Pos)
+                        | ((scll - 1) << I2C_TIMINGR_SCLL_Pos)
+                        | ((sclh - 1) << I2C_TIMINGR_SCLH_Pos)
+                        | (sdadel << I2C_TIMINGR_SDADEL_Pos)
+                        | ((scldel - 1) << I2C_TIMINGR_SCLDEL_Pos));
+        i2c->CR1 = I2C_CR1_PE;        
     }
+#endif
 
     return (struct i2c_config){ .i2c=i2c, .addr=addr<<1 };
 }
