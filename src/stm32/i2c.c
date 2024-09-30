@@ -23,7 +23,7 @@ DECL_ENUMERATION("i2c_bus", "i2c1a", 1);
 DECL_CONSTANT_STR("BUS_PINS_i2c1a", "PB8,PB9");
 DECL_ENUMERATION("i2c_bus", "i2c2", 2);
 DECL_CONSTANT_STR("BUS_PINS_i2c2", "PB10,PB11");
-#if CONFIG_MACH_STM32F2 || CONFIG_MACH_STM32F4
+#if CONFIG_MACH_STM32F2 || CONFIG_MACH_STM32F4 || CONFIG_MACH_STM32H7
 DECL_ENUMERATION("i2c_bus", "i2c3", 3);
 DECL_CONSTANT_STR("BUS_PINS_i2c3", "PA8,PC9");
   #if CONFIG_MACH_STM32F2 || CONFIG_MACH_STM32F4x5
@@ -38,7 +38,7 @@ static const struct i2c_info i2c_bus[] = {
     { I2C1, GPIO('B', 6), GPIO('B', 7) },
     { I2C1, GPIO('B', 8), GPIO('B', 9) },
     { I2C2, GPIO('B', 10), GPIO('B', 11) },
-#if CONFIG_MACH_STM32F2 || CONFIG_MACH_STM32F4
+#if CONFIG_MACH_STM32F2 || CONFIG_MACH_STM32F4 || CONFIG_MACH_STM32H7
     { I2C3, GPIO('A', 8), GPIO('C', 9) },
   #if CONFIG_MACH_STM32F2 || CONFIG_MACH_STM32F4x5
     { I2C2, GPIO('H', 4), GPIO('H', 5) },
@@ -79,12 +79,21 @@ i2c_setup(uint32_t bus, uint32_t rate, uint8_t addr)
         i2c->CR1 = I2C_CR1_SWRST;
         i2c->CR1 = 0;
 
+#if MACH_STM32H7
+        // Set 400Khz frequency and enable
+        uint32_t pclk = get_pclock_frequency((uint32_t)i2c);
+        i2c->CR2 = pclk / 250000;
+        i2c->CCR = pclk / 25000 / 2;
+        i2c->TRISE = (pclk / 250000) + 1;
+        i2c->CR1 = I2C_CR1_PE; 
+#else
         // Set 100Khz frequency and enable
         uint32_t pclk = get_pclock_frequency((uint32_t)i2c);
         i2c->CR2 = pclk / 1000000;
         i2c->CCR = pclk / 100000 / 2;
         i2c->TRISE = (pclk / 1000000) + 1;
-        i2c->CR1 = I2C_CR1_PE;
+        i2c->CR1 = I2C_CR1_PE;	
+#endif
     }
 
     return (struct i2c_config){ .i2c=i2c, .addr=addr<<1 };
